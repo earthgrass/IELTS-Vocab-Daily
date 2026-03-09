@@ -1,7 +1,8 @@
-name: 每日雅思词根群组推送
+name: 每日雅思词根推送
 
 on:
   schedule:
+    # 每天北京时间早上 7:00 自动运行
     - cron: '0 23 * * *'
   workflow_dispatch: 
 
@@ -22,9 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: 运行主程序推送到微信群组
+      - name: 运行主程序
         env:
+          # 这一步极其关键：将 GitHub Secrets 注入到运行环境的变量中
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-          PUSHPLUS_TOPIC: ${{ secrets.PUSHPLUS_TOPIC }}
         run: python main.py
