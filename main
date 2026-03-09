@@ -2,16 +2,14 @@ import os
 import requests
 from datetime import datetime
 
-# 1. 抓取 GitHub Secrets 里配置的变量
-# 你的 API Key: sk-94eb522ccddc4836914c2b8f26aef48e 将存储在这里
+# 从 GitHub Secrets 环境中安全读取密钥
 API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN")
-PUSHPLUS_TOPIC = os.environ.get("PUSHPLUS_TOPIC") # 你的群组编码
 
-# 2. 修改为 DeepSeek 的官方接口
+# DeepSeek 接口配置
 BASE_URL = "https://api.deepseek.com/v1/chat/completions"
 
-# 15天的词汇矩阵保持不变
+# 15天完整的词根词缀组合矩阵
 daily_plan = {
     1: ["spect/spic (看)", "vis/vid (看)", "pre- (前)", "-able/-ible (形容词后缀)"],
     2: ["tract (拉)", "pel/puls (推)", "pro- (向前)", "-tion/-sion (名词后缀)"],
@@ -40,13 +38,12 @@ def generate_vocab(items):
     3. 无翻译语境自测：用其中5个高级词汇写一段100字左右的英文长难句段落，绝对不要提供中文翻译。
     """
     
-    # 这里就是调用 API Key 的地方
     headers = {
         "Authorization": f"Bearer {API_KEY}", 
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "deepseek-chat",  # 3. 修改为 DeepSeek 模型
+        "model": "deepseek-chat",
         "messages": [
             {"role": "system", "content": "你是一个严谨且硬核的雅思词汇名师。"},
             {"role": "user", "content": prompt}
@@ -59,22 +56,29 @@ def generate_vocab(items):
     response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
 
-def send_to_wechat_group(title, content):
+def send_to_wechat(title, content):
+    if not PUSHPLUS_TOKEN:
+        print("❌ 未找到 PUSHPLUS_TOKEN，请检查 GitHub Secrets 配置。")
+        return
+
     url = "http://www.pushplus.plus/send"
     payload = {
         "token": PUSHPLUS_TOKEN,
         "title": title,
         "content": content,
-        "template": "markdown",
-        "topic": PUSHPLUS_TOPIC
+        "template": "markdown"
     }
     response = requests.post(url, json=payload)
     if response.json().get('code') == 200:
-        print("✅ 微信群组推送成功！")
+        print("✅ 微信推送成功！")
     else:
         print(f"❌ 推送失败：{response.text}")
 
 def main():
+    if not API_KEY:
+        print("❌ 未找到 API_KEY，请检查 GitHub Secrets 配置。")
+        return
+
     day_of_year = datetime.now().timetuple().tm_yday
     current_day = (day_of_year % 15) + 1  
     
@@ -85,7 +89,7 @@ def main():
     
     if vocab_content:
         title = f"📅 雅思词根 Day {current_day}：{items_today[0].split(' ')[0]} 等"
-        send_to_wechat_group(title, vocab_content)
+        send_to_wechat(title, vocab_content)
 
 if __name__ == "__main__":
     main()
