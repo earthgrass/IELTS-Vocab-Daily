@@ -1,0 +1,91 @@
+import os
+import requests
+from datetime import datetime
+
+# 1. 抓取 GitHub Secrets 里配置的变量
+# 你的 API Key: sk-94eb522ccddc4836914c2b8f26aef48e 将存储在这里
+API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN")
+PUSHPLUS_TOPIC = os.environ.get("PUSHPLUS_TOPIC") # 你的群组编码
+
+# 2. 修改为 DeepSeek 的官方接口
+BASE_URL = "https://api.deepseek.com/v1/chat/completions"
+
+# 15天的词汇矩阵保持不变
+daily_plan = {
+    1: ["spect/spic (看)", "vis/vid (看)", "pre- (前)", "-able/-ible (形容词后缀)"],
+    2: ["tract (拉)", "pel/puls (推)", "pro- (向前)", "-tion/-sion (名词后缀)"],
+    3: ["dic/dict (说)", "voc/vok (呼唤)", "in-/im- (否定/进入)", "-ive (形容词后缀)"],
+    4: ["fer (拿/带)", "port (拿/运)", "trans- (跨越)", "-ment (名词后缀)"],
+    5: ["fac/fect/fic (做)", "struct (建造)", "re- (再一次)", "-or/-er (做...的人/物)"],
+    6: ["vers/vert (转)", "volve/volu (卷/转)", "con-/com- (共同/加强)", "-ity/-ty (名词后缀)"],
+    7: ["cept/cap/ceive (拿/抓)", "tain/ten/tin (保持/拿)", "ab-/abs- (远离)", "-ate (动词/形容词后缀)"],
+    8: ["mit/miss (送/放)", "ject (扔)", "e-/ex- (向外)", "-al (形容词后缀)"],
+    9: ["tend/tens/tent (伸展)", "form (形状)", "de- (向下/分离)", "-ous/-ious (形容词后缀)"],
+    10: ["st/sta/sist (站立)", "pos/pon (放置)", "sub/sup- (在下面)", "-ize/-ise (动词后缀)"],
+    11: ["ced/ceed/cess (走)", "cur/curs (跑)", "inter- (在...之间)", "-nce/-ncy (名词后缀)"],
+    12: ["scrib/script (写)", "log/logu (说话/学科)", "di-/dis- (分开/否定)", "-ary/-ery (形容词/名词后缀)"],
+    13: ["sens/sent (感觉)", "path (感情/疾病)", "sym-/syn- (共同/相同)", "-ic/-ical (形容词后缀)"],
+    14: ["clud/clus (关闭)", "press (压)", "ad-及其变体 (去/朝向)", "-ure (名词后缀)"],
+    15: ["sid/sess (坐)", "gn/gno (知道)", "ob-/op- (反对/阻挡)", "-ify (动词后缀)"]
+}
+
+def generate_vocab(items):
+    item_str = ", ".join(items)
+    prompt = f"""
+    你是一位精通英语词源学的雅思名师。今天深度学习的词组是：【{item_str}】。
+    请严格按以下结构输出 Markdown 笔记：
+    1. 核心溯源：用通俗语言解释来源及本意。
+    2. 雅思高频词汇网络(20-25个单词)：格式为：**[单词]** (音标) `[词性]` - `[中文释义]`。并提供【硬核拆解】(前缀+词根+后缀=引申逻辑) 和【雅思语境例句】。
+    3. 无翻译语境自测：用其中5个高级词汇写一段100字左右的英文长难句段落，绝对不要提供中文翻译。
+    """
+    
+    # 这里就是调用 API Key 的地方
+    headers = {
+        "Authorization": f"Bearer {API_KEY}", 
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "deepseek-chat",  # 3. 修改为 DeepSeek 模型
+        "messages": [
+            {"role": "system", "content": "你是一个严谨且硬核的雅思词汇名师。"},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7
+    }
+    
+    print(f"正在向 DeepSeek 请求: {item_str}")
+    response = requests.post(BASE_URL, headers=headers, json=payload, timeout=60)
+    response.raise_for_status()
+    return response.json()['choices'][0]['message']['content']
+
+def send_to_wechat_group(title, content):
+    url = "http://www.pushplus.plus/send"
+    payload = {
+        "token": PUSHPLUS_TOKEN,
+        "title": title,
+        "content": content,
+        "template": "markdown",
+        "topic": PUSHPLUS_TOPIC
+    }
+    response = requests.post(url, json=payload)
+    if response.json().get('code') == 200:
+        print("✅ 微信群组推送成功！")
+    else:
+        print(f"❌ 推送失败：{response.text}")
+
+def main():
+    day_of_year = datetime.now().timetuple().tm_yday
+    current_day = (day_of_year % 15) + 1  
+    
+    items_today = daily_plan[current_day]
+    print(f"今天是循环的 Day {current_day}，学习内容：{items_today}")
+    
+    vocab_content = generate_vocab(items_today)
+    
+    if vocab_content:
+        title = f"📅 雅思词根 Day {current_day}：{items_today[0].split(' ')[0]} 等"
+        send_to_wechat_group(title, vocab_content)
+
+if __name__ == "__main__":
+    main()
